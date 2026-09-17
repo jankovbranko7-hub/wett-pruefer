@@ -1,0 +1,33 @@
+{
+  "source": "backtest_50_ligen.xlsx",
+  "n_spiele": 17685,
+  "ligen": 50,
+  "methode": "walk-forward",
+  "basisrate_over25": 0.5304,
+  "basisrate_btts": 0.5447,
+  "selektiv_60_40_ou": 0.5405,
+  "selektiv_60_40_btts": 0.5421,
+  "over_map": [
+    {"lo": 0.00, "hi": 0.40, "model_mean": 0.346, "actual": 0.483},
+    {"lo": 0.40, "hi": 0.45, "model_mean": 0.428, "actual": 0.503},
+    {"lo": 0.45, "hi": 0.50, "model_mean": 0.477, "actual": 0.522},
+    {"lo": 0.50, "hi": 0.55, "model_mean": 0.526, "actual": 0.523},
+    {"lo": 0.55, "hi": 0.60, "model_mean": 0.575, "actual": 0.532},
+    {"lo": 0.60, "hi": 0.65, "model_mean": 0.624, "actual": 0.546},
+    {"lo": 0.65, "hi": 0.70, "model_mean": 0.674, "actual": 0.539},
+    {"lo": 0.70, "hi": 0.75, "model_mean": 0.723, "actual": 0.548},
+    {"lo": 0.75, "hi": 1.01, "model_mean": 0.789, "actual": 0.540}
+  ],
+  "btts_map": [
+    {"lo": 0.00, "hi": 0.40, "model_mean": 0.349, "actual": 0.527},
+    {"lo": 0.40, "hi": 0.45, "model_mean": 0.428, "actual": 0.520},
+    {"lo": 0.45, "hi": 0.50, "model_mean": 0.477, "actual": 0.507},
+    {"lo": 0.50, "hi": 0.55, "model_mean": 0.527, "actual": 0.550},
+    {"lo": 0.55, "hi": 0.60, "model_mean": 0.575, "actual": 0.563},
+    {"lo": 0.60, "hi": 0.65, "model_mean": 0.624, "actual": 0.546},
+    {"lo": 0.65, "hi": 0.70, "model_mean": 0.672, "actual": 0.549},
+    {"lo": 0.70, "hi": 0.75, "model_mean": 0.721, "actual": 0.550},
+    {"lo": 0.75, "hi": 1.01, "model_mean": 0.775, "actual": 0.565}
+  ],
+  "regel": "Geeichte P nach Bin-actual. Extreme nicht als hochsicher."
+}
