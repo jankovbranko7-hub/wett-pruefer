@@ -10,22 +10,27 @@ from footystats import FootyStats, FootyStatsError
 app = FastAPI(title="Wett-Pruefer", version="1.1")
 APP_TOKEN = os.environ.get("PRUEFER_TOKEN", "").strip()
 
-FORM = """<!doctype html><html><head><meta name=viewport content=\"width=device-width,initial-scale=1\">
+PAGE = """<!doctype html>
+<html><head><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Pruefer</title>
-<style>body{font-family:-apple-system,sans-serif;background:#111;color:#eee;margin:16px;max-width:640px}
-textarea,input{width:100%;background:#222;color:#eee;border:1px solid #444;border-radius:8px;padding:10px}
-button{margin-top:12px;padding:12px 16px;border:0;border-radius:8px;background:#7c3aed;color:#fff;font-size:16px}
-pre{white-space:pre-wrap;background:#1a1a1a;padding:12px;border-radius:8px}</style></head>
-<body><h2>Spiel pruefen</h2>
-<p>Eine Zeile pro Spiel, max 10. Beispiel: Brentford Chelsea</p>
+<style>
+body { font-family: sans-serif; background: #111; color: #eee; margin: 16px; }
+textarea, input { width: 100%; background: #222; color: #eee; border: 1px solid #444; border-radius: 8px; padding: 10px; }
+button { margin-top: 12px; padding: 12px 16px; border: 0; border-radius: 8px; background: #7c3aed; color: #fff; font-size: 16px; }
+pre { white-space: pre-wrap; background: #1a1a1a; padding: 12px; border-radius: 8px; }
+</style></head><body>
+<h2>Spiel pruefen</h2>
+<p>Eine Zeile pro Spiel, max 10.</p>
 <form method=post action=/form>
 <label>Token</label>
-<input name=token type=password value=\"{token}\" placeholder=pruefer-2026>
+<input name=token type=password placeholder=pruefer-2026>
 <label>Spiele</label>
-<textarea name=spiele rows=12 placeholder=\"1 Brentford Chelsea\n2 Ajax Utrecht\"></textarea>
-<button>Pruefen</button></form>
-{result}
-</body></html>"""
+<textarea name=spiele rows=12></textarea>
+<button>Pruefen</button>
+</form>
+RESULT
+</body></html>
+"""
 
 class ListeIn(BaseModel):
     spiele: list[str] = Field(..., min_length=1, max_length=10)
@@ -41,19 +46,6 @@ def _auth_ok(token: str | None) -> bool:
         return True
     return (token or "") == APP_TOKEN
 
-def _run(spiele: list[str]) -> str:
-    api = FootyStats(_key())
-    blocks = []
-    for name in spiele[:10]:
-        name = name.strip()
-        if not name:
-            continue
-        try:
-            blocks.append(analyze(api, name))
-        except Exception as exc:
-            blocks.append(name + "\nFehler: " + str(exc))
-    return "\n\n---\n\n".join(blocks) if blocks else "Keine Spiele."
-
 def _clean_lines(raw: str) -> list[str]:
     out = []
     for line in (raw or "").splitlines():
@@ -65,9 +57,19 @@ def _clean_lines(raw: str) -> list[str]:
         out.append(s)
     return out[:10]
 
+def _run(spiele: list[str]) -> str:
+    api = FootyStats(_key())
+    blocks = []
+    for name in spiele:
+        try:
+            blocks.append(analyze(api, name))
+        except Exception as exc:
+            blocks.append(name + "\nFehler: " + str(exc))
+    return "\n\n---\n\n".join(blocks) if blocks else "Keine Spiele."
+
 @app.get("/", response_class=HTMLResponse)
 def home():
-    return FORM.format(token="", result="")
+    return PAGE.replace("RESULT", "")
 
 @app.get("/health")
 def health():
@@ -76,12 +78,13 @@ def health():
 @app.post("/form", response_class=HTMLResponse)
 def form(spiele: str = Form(""), token: str = Form("")):
     if not _auth_ok(token):
-        return FORM.format(token="", result="<pre>Token falsch.</pre>")
+        return PAGE.replace("RESULT", "<pre>Token falsch.</pre>")
     try:
         text = _run(_clean_lines(spiele))
     except Exception as exc:
         text = str(exc)
-    return FORM.format(token=token, result="<pre>" + text.replace("<", "<") + "</pre>")
+    safe = text.replace("&", "&").replace("<", "<")
+    return PAGE.replace("RESULT", "<pre>" + safe + "</pre>")
 
 @app.post("/pruef")
 def pruef(body: ListeIn, authorization: str | None = Header(default=None)):
