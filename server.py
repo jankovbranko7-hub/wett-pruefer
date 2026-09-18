@@ -4,10 +4,10 @@ import os
 from fastapi import FastAPI, Form, Header, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
-from analyze import analyze
+from analyze import analyze, analyze_html
 from footystats import FootyStats, FootyStatsError
 
-app = FastAPI(title="Wett-Pruefer", version="1.3")
+app = FastAPI(title="Wett-Pruefer", version="1.4")
 APP_TOKEN = os.environ.get("PRUEFER_TOKEN", "").strip()
 
 PAGE = """<!doctype html>
@@ -17,7 +17,11 @@ PAGE = """<!doctype html>
 body { font-family: sans-serif; background: #111; color: #eee; margin: 16px; }
 textarea, input { width: 100%; background: #222; color: #eee; border: 1px solid #444; border-radius: 8px; padding: 10px; }
 button { margin-top: 12px; padding: 12px 16px; border: 0; border-radius: 8px; background: #7c3aed; color: #fff; font-size: 16px; }
-pre { white-space: pre-wrap; background: #1a1a1a; padding: 12px; border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0 24px; font-size: 15px; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #333; }
+th { color: #aaa; font-weight: 600; }
+.hinweis { color: #aaa; font-size: 13px; }
+.err { background: #1a1a1a; padding: 12px; border-radius: 8px; }
 </style></head><body>
 <h2>Spiel pruefen</h2>
 <p>Eine Zeile pro Spiel, max 10.</p>
@@ -25,7 +29,7 @@ pre { white-space: pre-wrap; background: #1a1a1a; padding: 12px; border-radius: 
 <label>Token</label>
 <input name=token type=text autocomplete=off autocapitalize=off value="pruefer-2026">
 <label>Spiele</label>
-<textarea name=spiele rows=12></textarea>
+<textarea name=spiele rows=8></textarea>
 <button>Pruefen</button>
 </form>
 RESULT
@@ -57,15 +61,15 @@ def _clean_lines(raw: str) -> list[str]:
         out.append(s)
     return out[:10]
 
-def _run(spiele: list[str]) -> str:
+def _run_html(spiele: list[str]) -> str:
     api = FootyStats(_key())
     blocks = []
     for name in spiele:
         try:
-            blocks.append(analyze(api, name))
+            blocks.append(analyze_html(api, name))
         except Exception as exc:
-            blocks.append(name + "\nFehler: " + str(exc))
-    return "\n\n---\n\n".join(blocks) if blocks else "Keine Spiele."
+            blocks.append("<p class=err>" + name + ": " + str(exc) + "</p>")
+    return "".join(blocks) if blocks else "<p>Keine Spiele.</p>"
 
 def _page(result: str = "") -> str:
     return PAGE.replace("RESULT", result)
@@ -79,13 +83,12 @@ def home():
 @app.post("/form", response_class=HTMLResponse)
 def form(spiele: str = Form(""), token: str = Form("")):
     if not _auth_ok(token):
-        return _page("<pre>Token falsch. Genau pruefer-2026.</pre>")
+        return _page("<p class=err>Token falsch. Genau pruefer-2026.</p>")
     try:
-        text = _run(_clean_lines(spiele))
+        html = _run_html(_clean_lines(spiele))
     except Exception as exc:
-        text = str(exc)
-    safe = text.replace("&", "&").replace("<", "<")
-    return _page("<pre>" + safe + "</pre>")
+        html = "<p class=err>" + str(exc) + "</p>"
+    return _page(html)
 
 @app.get("/health")
 def health():
