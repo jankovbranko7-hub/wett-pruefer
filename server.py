@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from analyze import analyze
 from footystats import FootyStats, FootyStatsError
 
-app = FastAPI(title="Wett-Pruefer", version="1.2")
+app = FastAPI(title="Wett-Pruefer", version="1.3")
 APP_TOKEN = os.environ.get("PRUEFER_TOKEN", "").strip()
 
 PAGE = """<!doctype html>
@@ -21,7 +21,7 @@ pre { white-space: pre-wrap; background: #1a1a1a; padding: 12px; border-radius: 
 </style></head><body>
 <h2>Spiel pruefen</h2>
 <p>Eine Zeile pro Spiel, max 10.</p>
-<form method=post action=/form autocomplete=off>
+<form method=post action=/>
 <label>Token</label>
 <input name=token type=text autocomplete=off autocapitalize=off value="pruefer-2026">
 <label>Spiele</label>
@@ -67,24 +67,29 @@ def _run(spiele: list[str]) -> str:
             blocks.append(name + "\nFehler: " + str(exc))
     return "\n\n---\n\n".join(blocks) if blocks else "Keine Spiele."
 
+def _page(result: str = "") -> str:
+    return PAGE.replace("RESULT", result)
+
 @app.get("/", response_class=HTMLResponse)
+@app.get("/form", response_class=HTMLResponse)
 def home():
-    return PAGE.replace("RESULT", "")
+    return _page()
 
-@app.get("/health")
-def health():
-    return {"ok": True, "kalibrierung": "17685/50"}
-
+@app.post("/", response_class=HTMLResponse)
 @app.post("/form", response_class=HTMLResponse)
 def form(spiele: str = Form(""), token: str = Form("")):
     if not _auth_ok(token):
-        return PAGE.replace("RESULT", "<pre>Token falsch. Genau pruefer-2026 tippen, kein iCloud-Passwort.</pre>")
+        return _page("<pre>Token falsch. Genau pruefer-2026.</pre>")
     try:
         text = _run(_clean_lines(spiele))
     except Exception as exc:
         text = str(exc)
     safe = text.replace("&", "&").replace("<", "<")
-    return PAGE.replace("RESULT", "<pre>" + safe + "</pre>")
+    return _page("<pre>" + safe + "</pre>")
+
+@app.get("/health")
+def health():
+    return {"ok": True, "kalibrierung": "17685/50"}
 
 @app.post("/pruef")
 def pruef(body: ListeIn, authorization: str | None = Header(default=None)):
