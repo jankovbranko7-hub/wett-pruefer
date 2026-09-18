@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from analyze import analyze
 from footystats import FootyStats, FootyStatsError
 
-app = FastAPI(title="Wett-Pruefer", version="1.1")
+app = FastAPI(title="Wett-Pruefer", version="1.2")
 APP_TOKEN = os.environ.get("PRUEFER_TOKEN", "").strip()
 
 PAGE = """<!doctype html>
@@ -21,9 +21,9 @@ pre { white-space: pre-wrap; background: #1a1a1a; padding: 12px; border-radius: 
 </style></head><body>
 <h2>Spiel pruefen</h2>
 <p>Eine Zeile pro Spiel, max 10.</p>
-<form method=post action=/form>
+<form method=post action=/form autocomplete=off>
 <label>Token</label>
-<input name=token type=password placeholder=pruefer-2026>
+<input name=token type=text autocomplete=off autocapitalize=off value="pruefer-2026">
 <label>Spiele</label>
 <textarea name=spiele rows=12></textarea>
 <button>Pruefen</button>
@@ -44,7 +44,7 @@ def _key():
 def _auth_ok(token: str | None) -> bool:
     if not APP_TOKEN:
         return True
-    return (token or "") == APP_TOKEN
+    return (token or "").strip() == APP_TOKEN
 
 def _clean_lines(raw: str) -> list[str]:
     out = []
@@ -78,7 +78,7 @@ def health():
 @app.post("/form", response_class=HTMLResponse)
 def form(spiele: str = Form(""), token: str = Form("")):
     if not _auth_ok(token):
-        return PAGE.replace("RESULT", "<pre>Token falsch.</pre>")
+        return PAGE.replace("RESULT", "<pre>Token falsch. Genau pruefer-2026 tippen, kein iCloud-Passwort.</pre>")
     try:
         text = _run(_clean_lines(spiele))
     except Exception as exc:
@@ -88,7 +88,7 @@ def form(spiele: str = Form(""), token: str = Form("")):
 
 @app.post("/pruef")
 def pruef(body: ListeIn, authorization: str | None = Header(default=None)):
-    tok = (authorization or "").replace("Bearer ", "")
+    tok = (authorization or "").replace("Bearer ", "").strip()
     if not _auth_ok(tok):
         raise HTTPException(401, "Token falsch")
     try:
