@@ -18,7 +18,7 @@ def _norm(s: str) -> str:
 
 def parse_query(query: str):
     raw = query.strip()
-    for sep in (" - ", " – ", " vs ", " VS ", " gegen ", " v "):
+    for sep in (" - ", " \u2013 ", " vs ", " VS ", " gegen ", " v "):
         if sep.lower() in raw.lower():
             idx = raw.lower().find(sep.lower())
             return raw[:idx].strip(), raw[idx + len(sep):].strip()
@@ -60,25 +60,20 @@ def decide(probs, *, cup=False, n_home=0, n_away=0):
     btts_c = calibrate_prob(btts_raw, "btts")
     thin = cup or n_home < 4 or n_away < 4
     if not thin and over_c >= 0.555 and over_raw >= 0.62:
-        out.append(Verdict("Over/Under 2.5", "Over 2.5", over_c, f"geeicht {over_c:.0%} (roh {over_raw:.0%})"))
+        out.append(Verdict("Over 2.5", "Over 2.5", over_c, f"roh {over_raw:.0%}"))
     elif not thin and (1 - over_c) >= 0.51 and over_raw <= 0.42:
-        out.append(Verdict("Over/Under 2.5", "Under 2.5", 1 - over_c, f"geeicht {1-over_c:.0%} (roh {over_raw:.0%})"))
+        out.append(Verdict("Under 2.5", "Under 2.5", 1 - over_c, f"roh {over_raw:.0%}"))
     else:
-        out.append(Verdict("Over/Under 2.5", None, over_c, f"skip geeicht Over {over_c:.0%} (roh {over_raw:.0%})"))
+        out.append(Verdict("Over 2.5", None, over_c, f"roh {over_raw:.0%}"))
     if not thin and btts_c >= 0.570 and btts_raw >= 0.62:
-        out.append(Verdict("BTTS", "BTTS Ja", btts_c, f"geeicht {btts_c:.0%} (roh {btts_raw:.0%})"))
+        out.append(Verdict("BTTS Ja", "BTTS Ja", btts_c, f"roh {btts_raw:.0%}"))
     elif not thin and (1 - btts_c) >= 0.50 and btts_raw <= 0.42:
-        out.append(Verdict("BTTS", "BTTS Nein", 1 - btts_c, f"geeicht {1-btts_c:.0%} (roh {btts_raw:.0%})"))
+        out.append(Verdict("BTTS Nein", "BTTS Nein", 1 - btts_c, f"roh {btts_raw:.0%}"))
     else:
-        out.append(Verdict("BTTS", None, btts_c, f"skip geeicht Ja {btts_c:.0%} (roh {btts_raw:.0%})"))
-    if ENABLE_1X2:
-        best = max((("Heim", probs["home"]), ("Unentschieden", probs["draw"]), ("Auswaerts", probs["away"])), key=lambda x: x[1])
-        out.append(Verdict("1X2", best[0] if best[1] >= THRESHOLD_1X2 and best[0] != "Unentschieden" else None, best[1], "1X2"))
-    else:
-        out.append(Verdict("1X2", None, max(probs["home"], probs["draw"], probs["away"]), "aus"))
+        out.append(Verdict("BTTS Ja", None, btts_c, f"roh {btts_raw:.0%}"))
     return out
 
-def analyze(api: FootyStats, query: str) -> str:
+def _bundle(api, query):
     home_q, away_q = parse_query(query)
     match, season, matches = find_match(api, home_q, away_q)
     home_id, away_id = int(match["homeID"]), int(match["awayID"])
@@ -100,9 +95,45 @@ def analyze(api: FootyStats, query: str) -> str:
     verdicts = decide(probs, cup=cup, n_home=home.games, n_away=away.games)
     kick = ""
     if match.get("date_unix"):
-        kick = datetime.fromtimestamp(int(match["date_unix"]), tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    lines = [f"{home_name} – {away_name}", f"Wettbewerb: {league}", f"Anstoss: {kick} | {match.get('status')}", f"Tore erwartet: {lam_h:.2f} / {lam_a:.2f} (Liga {lg_tot:.2f})", ""]
-    for v in verdicts:
-        lines.append(f"{v.market:16} {(v.pick or 'skip'):12} {v.probability:5.0%}  {v.reason}")
-    lines.append(f"Roh Over {probs['over25']:.0%} BTTS {probs['btts_yes']:.0%} | geeicht Over {calibrate_prob(probs['over25'],'over'):.0%} BTTS {calibrate_prob(probs['btts_yes'],'btts'):.0%}")
+        kick = datetime.fromtimestamp(int(match["date_unix"]), tz=timezone.utc).strftime("%d.%m. %H:%M")
+    return {
+        "spiel": f"{home_name} vs {away_name}",
+        "liga": league,
+        "kick": kick,
+        "verdicts": verdicts,
+        "over_raw": probs["over25"],
+        "over_c": calibrate_prob(probs["over25"], "over"),
+        "btts_raw": probs["btts_yes"],
+        "btts_c": calibrate_prob(probs["btts_yes"], "btts"),
+    }
+
+def analyze(api: FootyStats, query: str) -> str:
+    b = _bundle(api, query)
+    tips = [v.pick for v in b["verdicts"] if v.pick]
+    tip = ", ".join(tips) if tips else "kein Tipp"
+    lines = [
+        b["spiel"],
+        f"{b['liga']} | {b['kick']}",
+        f"Aktion: {tip}",
+        f"Over geeicht {b['over_c']:.0%} (roh {b['over_raw']:.0%})",
+        f"BTTS geeicht {b['btts_c']:.0%} (roh {b['btts_raw']:.0%})",
+    ]
     return "\n".join(lines)
+
+def analyze_html(api: FootyStats, query: str) -> str:
+    b = _bundle(api, query)
+    rows = ""
+    for v in b["verdicts"]:
+        aktion = v.pick or "kein Tipp"
+        color = "#4ade80" if v.pick else "#f87171"
+        rows += (
+            f"<tr><td>{v.market}</td><td style='color:{color};font-weight:700'>{aktion}</td>"
+            f"<td>{v.probability:.0%}</td><td>{v.reason}</td></tr>"
+        )
+    return (
+        f"<h3>{b['spiel']}</h3><p>{b['liga']} | {b['kick']}</p>"
+        f"<table><thead><tr><th>Markt</th><th>Aktion</th><th>Geeicht</th><th>Roh</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table>"
+        "<p class='hinweis'>Nur die gruene Aktion ist ein Tipp. Rot/kein Tipp = nicht wetten. "
+        "Geeicht ist keine sichere Quote.</p>"
+    )
